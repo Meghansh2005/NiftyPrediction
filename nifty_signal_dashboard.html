@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SignalX — Intraday Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;500;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0a0c0f;--surface:#111318;--surface2:#181c23;--surface3:#1e2330;
+    --border:#ffffff10;--border2:#ffffff1a;--text:#f0f2f6;--text2:#8892a4;--text3:#4a5568;
+    --green:#00d68f;--green-dim:#00d68f22;--green-border:#00d68f44;
+    --red:#ff4757;--red-dim:#ff475722;--red-border:#ff475744;
+    --amber:#ffb830;--amber-dim:#ffb83022;
+    --blue:#4fa3ff;--blue-dim:#4fa3ff18;
+    --font-display:'Syne',sans-serif;--font-mono:'DM Mono',monospace;
+  }
+  body{background:var(--bg);color:var(--text);font-family:var(--font-mono);min-height:100vh}
+  .dash{display:flex;flex-direction:column;width:100%}
+  /* TOPBAR */
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--surface)}
+  .topbar-left{display:flex;align-items:center;gap:12px}
+  .logo{font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.05em}
+  .logo span{color:var(--green)}
+  .live-badge{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--green);letter-spacing:.12em;text-transform:uppercase}
+  .live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 1.5s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .topbar-right{font-size:11px;color:var(--text3)}
+  #clock{color:var(--text2)}
+  /* INDEX TABS */
+  .index-selector{display:flex;border-bottom:1px solid var(--border);background:var(--surface)}
+  .idx-btn{flex:1;padding:10px 8px;font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;border:none;background:transparent;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+  .idx-btn:hover{color:var(--text2);background:var(--surface2)}
+  .idx-btn.active{color:var(--green);border-bottom-color:var(--green);background:var(--surface2)}
+  .idx-change{font-size:9px;display:block;margin-top:2px}
+  .idx-change.up{color:var(--green)}.idx-change.down{color:var(--red)}
+</style>
+</head>
+<body>
+<div class="dash">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo">SIGNAL<span>X</span></div>
+      <div class="live-badge"><span class="live-dot"></span>LIVE</div>
+    </div>
+    <div class="topbar-right">NSE / BSE &nbsp;·&nbsp; <span id="clock">--:--:--</span></div>
+  </div>
+  <div class="index-selector">
+    <button class="idx-btn active" onclick="switchIndex('nifty',this)">NIFTY 50<span class="idx-change up" id="nifty-chg">+0.00%</span></button>
+    <button class="idx-btn" onclick="switchIndex('banknifty',this)">BANK NIFTY<span class="idx-change up" id="banknifty-chg">+0.00%</span></button>
+    <button class="idx-btn" onclick="switchIndex('sensex',this)">SENSEX<span class="idx-change up" id="sensex-chg">+0.00%</span></button>
+  </div>
+
+  <!-- CANDLE DIRECTION BANNER -->
+  <div id="candle-banner" style="padding:10px 20px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
+    <div id="candle-badge" style="padding:4px 14px;border-radius:4px;font-family:var(--font-display);font-size:13px;font-weight:700;letter-spacing:.08em;background:var(--amber-dim);color:var(--amber);border:1px solid #ffb83044">SIDEWAYS</div>
+    <div id="candle-desc" style="font-size:11px;color:var(--text2);line-height:1.5">Fetching candle prediction…</div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--border)">
+
+    <!-- SIGNAL PANEL -->
+    <div style="background:var(--surface);padding:16px;grid-column:1/3;display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--text3)">15-min candle signal</div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <div id="sig-arrow" style="width:52px;height:52px;display:flex;align-items:center;justify-content:center;border-radius:6px;background:var(--amber-dim);border:1px solid #ffb83044;flex-shrink:0">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" id="sig-svg">
+            <path d="M5 12h14" stroke="#ffb830" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <div id="sig-word" style="font-family:var(--font-display);font-size:26px;font-weight:700;color:var(--amber)">LOADING…</div>
+          <div id="sig-sub" style="font-size:10px;color:var(--text2);margin-top:4px">Fetching data…</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <div style="display:flex;justify-content:space-between">
+          <span style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text3)">Confidence</span>
+          <span id="conf-val" style="font-size:13px;font-weight:500;color:var(--amber)">–</span>
+        </div>
+        <div style="height:4px;background:var(--surface3);border-radius:2px;overflow:hidden">
+          <div id="conf-bar" style="height:100%;border-radius:2px;background:var(--amber);width:0%;transition:width .6s"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRICE PANEL -->
+    <div style="background:var(--surface);padding:16px;display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text3)">Current price</div>
+      <div id="price-big" style="font-family:var(--font-display);font-size:22px;font-weight:600">––––</div>
+      <div id="price-chg" style="font-size:11px;color:var(--text2)">–</div>
+      <div style="font-size:9px;color:var(--text3)" id="ts-label">–</div>
+      <div style="margin-top:6px">
+        <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text3)">Expiry</div>
+        <div id="expiry-row" style="margin-top:4px;font-size:11px;color:var(--text2)">–</div>
+      </div>
+    </div>
+
+    <!-- ML PROBA -->
+    <div style="background:var(--surface);padding:16px;grid-column:3/4">
+      <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text3)">ML probabilities</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+            <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em">Bullish</span>
+            <span id="pb-bull" style="font-size:10px;color:var(--green)">–</span>
+          </div>
+          <div style="height:6px;background:var(--surface3);border-radius:3px;overflow:hidden"><div id="pb-bull-bar" style="height:100%;background:var(--green);width:0%;transition:width .7s;border-radius:3px"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+            <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em">Neutral</span>
+            <span id="pb-neu" style="font-size:10px;color:var(--text2)">–</span>
+          </div>
+          <div style="height:6px;background:var(--surface3);border-radius:3px;overflow:hidden"><div id="pb-neu-bar" style="height:100%;background:var(--text3);width:0%;transition:width .7s;border-radius:3px"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+            <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em">Bearish</span>
+            <span id="pb-bear" style="font-size:10px;color:var(--red)">–</span>
+          </div>
+          <div style="height:6px;background:var(--surface3);border-radius:3px;overflow:hidden"><div id="pb-bear-bar" style="height:100%;background:var(--red);width:0%;transition:width .7s;border-radius:3px"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SIGNAL COMPONENTS -->
+    <div style="background:var(--surface);padding:16px;grid-column:1/4">
+      <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text3)">Signal components</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:10px" id="breakdown-grid">
+        <div style="background:var(--surface2);border-radius:4px;padding:10px;border:1px solid var(--border)"><div style="font-size:9px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">ML (45%)</div><div id="bk-ml" style="font-size:14px;font-weight:500;color:var(--text2)">–</div><div style="margin-top:5px;height:3px;background:var(--surface3);border-radius:2px;overflow:hidden"><div id="bk-ml-b" style="height:100%;width:50%;background:var(--text3);border-radius:2px"></div></div></div>
+        <div style="background:var(--surface2);border-radius:4px;padding:10px;border:1px solid var(--border)"><div style="font-size:9px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">News (15%)</div><div id="bk-news" style="font-size:14px;font-weight:500;color:var(--text2)">–</div><div style="margin-top:5px;height:3px;background:var(--surface3);border-radius:2px;overflow:hidden"><div id="bk-news-b" style="height:100%;width:50%;background:var(--text3);border-radius:2px"></div></div></div>
+        <div style="background:var(--surface2);border-radius:4px;padding:10px;border:1px solid var(--border)"><div style="font-size:9px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Global (15%)</div><div id="bk-global" style="font-size:14px;font-weight:500;color:var(--text2)">–</div><div style="margin-top:5px;height:3px;background:var(--surface3);border-radius:2px;overflow:hidden"><div id="bk-global-b" style="height:100%;width:50%;background:var(--text3);border-radius:2px"></div></div></div>
+        <div style="background:var(--surface2);border-radius:4px;padding:10px;border:1px solid var(--border)"><div style="font-size:9px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">VIX (10%)</div><div id="bk-vix" style="font-size:14px;font-weight:500;color:var(--text2)">–</div><div style="margin-top:5px;height:3px;background:var(--surface3);border-radius:2px;overflow:hidden"><div id="bk-vix-b" style="height:100%;width:50%;background:var(--text3);border-radius:2px"></div></div></div>
+        <div style="background:var(--surface2);border-radius:4px;padding:10px;border:1px solid var(--border)"><div style="font-size:9px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Options (15%)</div><div id="bk-opt" style="font-size:14px;font-weight:500;color:var(--text2)">–</div><div style="margin-top:5px;height:3px;background:var(--surface3);border-radius:2px;overflow:hidden"><div id="bk-opt-b" style="height:100%;width:50%;background:var(--text3);border-radius:2px"></div></div></div>
+      </div>
+    </div>
+
+    <!-- SUPPORT & RESISTANCE -->
+    <div style="background:var(--surface);padding:16px;grid-column:1/4">
+      <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text3)">Support &amp; Resistance Levels (Daily Pivot)</div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:10px" id="sr-grid">
+        <div style="background:var(--red-dim);border:1px solid var(--red-border);border-radius:4px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--red);letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px">S3</div><div id="sr-s3" style="font-size:12px;font-weight:500;color:var(--red)">–</div></div>
+        <div style="background:var(--red-dim);border:1px solid var(--red-border);border-radius:4px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--red);letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px">S2</div><div id="sr-s2" style="font-size:12px;font-weight:500;color:var(--red)">–</div></div>
+        <div style="background:var(--red-dim);border:1px solid var(--red-border);border-radius:4px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--red);letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px">S1</div><div id="sr-s1" style="font-size:13px;font-weight:600;color:var(--red)">–</div></div>
+        <div style="background:var(--blue-dim);border:1px solid #4fa3ff33;border-radius:4px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--blue);letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px">PIVOT</div><div id="sr-pivot" style="font-size:13px;font-weight:700;color:var(--blue)">–</div></div>
+        <div style="background:var(--green-dim);border:1px solid var(--green-border);border-radius:4px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--green);letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px">R1</div><div id="sr-r1" style="font-size:13px;font-weight:600;color:var(--green)">–</div></div>
+        <div style="background:var(--green-dim);border:1px solid var(--green-border);border-radius:4px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--green);letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px">R2</div><div id="sr-r2" style="font-size:12px;font-weight:500;color:var(--green)">–</div></div>
+        <div style="background:var(--green-dim);border:1px solid var(--green-border);border-radius:4px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--green);letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px">R3</div><div id="sr-r3" style="font-size:12px;font-weight:500;color:var(--green)">–</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-top:6px">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:var(--text3)">Swing High (5h)</span><span id="sr-sh" style="font-size:11px;font-weight:500;color:var(--green)">–</span></div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:var(--text3)">Swing Low (5h)</span><span id="sr-sl" style="font-size:11px;font-weight:500;color:var(--red)">–</span></div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:var(--text3)">Round Above</span><span id="sr-ra" style="font-size:11px;font-weight:500;color:var(--text2)">–</span></div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:var(--text3)">Round Below</span><span id="sr-rb" style="font-size:11px;font-weight:500;color:var(--text2)">–</span></div>
+      </div>
+    </div>
+
+    <!-- MARKET CONTEXT -->
+    <div style="background:var(--surface);padding:16px;grid-column:1/2">
+      <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text3)">Market context</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 8px;background:var(--surface2);border-radius:3px;border:1px solid var(--border)"><span style="font-size:10px;color:var(--text3)">India VIX</span><span id="ctx-vix" style="font-size:11px;font-weight:500;color:var(--text2)">–</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 8px;background:var(--surface2);border-radius:3px;border:1px solid var(--border)"><span style="font-size:10px;color:var(--text3)">NQ Futures</span><span id="ctx-nq" style="font-size:11px;font-weight:500;color:var(--text2)">–</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 8px;background:var(--surface2);border-radius:3px;border:1px solid var(--border)"><span style="font-size:10px;color:var(--text3)">USD/INR Δ</span><span id="ctx-usdinr" style="font-size:11px;font-weight:500;color:var(--text2)">–</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 8px;background:var(--surface2);border-radius:3px;border:1px solid var(--border)"><span style="font-size:10px;color:var(--text3)">PCR Ratio</span><span id="ctx-pcr" style="font-size:11px;font-weight:500;color:var(--text2)">–</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 8px;background:var(--surface2);border-radius:3px;border:1px solid var(--border)"><span style="font-size:10px;color:var(--text3)">Options API</span><span id="ctx-opt-stat" style="font-size:11px;font-weight:500;color:var(--text2)">–</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 8px;background:var(--surface2);border-radius:3px;border:1px solid var(--border)"><span style="font-size:10px;color:var(--text3)">News score</span><span id="ctx-news" style="font-size:11px;font-weight:500;color:var(--text2)">–</span></div>
+      </div>
+    </div>
+
+    <!-- TRADE SETUP -->
+    <div style="background:var(--surface);padding:16px;grid-column:2/4">
+      <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text3)">Suggested setup</div>
+      <div id="trade-text" style="margin-top:8px;font-size:12px;color:var(--text2);line-height:1.7">–</div>
+      <div id="risk-chip-wrap" style="margin-top:8px"></div>
+    </div>
+
+    <!-- NEWS FEED -->
+    <div style="background:var(--surface);padding:16px;grid-column:1/4">
+      <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text3)">News feed (top 5)</div>
+      <div id="news-feed" style="display:flex;flex-direction:column;gap:6px;margin-top:10px">
+        <div style="font-size:11px;color:var(--text3)">Fetching headlines…</div>
+      </div>
+    </div>
+
+    <!-- MODEL EDGE / BACKTEST -->
+    <div style="background:var(--surface);padding:16px;grid-column:1/4">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text3)">Model edge — walk-forward backtest</div>
+        <button onclick="fetchBacktest()" id="bt-btn" style="font-family:var(--font-mono);font-size:9px;padding:3px 10px;border:1px solid var(--border2);background:transparent;color:var(--text3);border-radius:3px;cursor:pointer;letter-spacing:.08em">↻ LOAD</button>
+      </div>
+      <div id="backtest-panel" style="margin-top:10px">
+        <div style="font-size:11px;color:var(--text3)">Click LOAD to run backtest analysis…</div>
+      </div>
+    </div>
+
+    <!-- SWING / OVERNIGHT PANEL -->
+    <div style="background:var(--surface);padding:16px;grid-column:1/4">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text3)">Swing &amp; overnight analysis — full day + next open</div>
+        <button onclick="fetchSwing()" id="sw-btn" style="font-family:var(--font-mono);font-size:9px;padding:3px 10px;border:1px solid var(--border2);background:transparent;color:var(--text3);border-radius:3px;cursor:pointer;letter-spacing:.08em">↻ LOAD</button>
+      </div>
+      <div id="swing-panel" style="margin-top:10px">
+        <div style="font-size:11px;color:var(--text3)">Click LOAD to fetch swing analysis…</div>
+      </div>
+    </div>
+
+    <!-- HOW TO USE -->
+    <div style="background:var(--surface);padding:16px;grid-column:1/4;display:flex;align-items:flex-start;gap:14px">
+      <div style="width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--blue-dim);border:1px solid #4fa3ff33">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 19l-7-7 7-7M15 5l7 7-7 7" stroke="#4fa3ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div>
+        <div style="font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--text3);margin-bottom:4px">How to use this</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.6">Signals update every 15 min. The candle direction banner tells you whether the <em>current 15-min candle</em> is predicted to close UP, DOWN, or SIDEWAYS vs the open. Confidence &gt;65% = stronger lean. Always enter on confirmation — a follow-through candle, not just the signal. Use ATM options. Set SL at the prior candle's high/low. VIX &gt;20 = reduce position size by 30–50%.</div>
+      </div>
+    </div>
+
+  </div><!-- end main grid -->
+
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 20px;border-top:1px solid var(--border);background:var(--surface)">
+    <div id="last-updated" style="font-size:10px;color:var(--text3)">Last updated: –</div>
+    <button id="refresh-btn" onclick="fetchSignal()" style="font-family:var(--font-mono);font-size:10px;padding:4px 12px;border:1px solid var(--border2);background:transparent;color:var(--text2);border-radius:3px;cursor:pointer;letter-spacing:.08em;transition:all .12s">↻ REFRESH</button>
+  </div>
+  <div style="font-size:9px;color:var(--text3);padding:8px 20px;border-top:1px solid var(--border);text-align:center;line-height:1.6">⚠ Decision-support tool only. Not financial advice. All trades carry risk. Use stop-losses on every position.</div>
+</div>
+
+<script>
+  const API_BASE = 'http://localhost:8001';
+  let currentIndex = 'nifty';
+  let isFetching = false;
+
+  // Clock
+  function clock() {
+    const now = new Date();
+    document.getElementById('clock').textContent =
+      now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  }
+  setInterval(clock, 1000); clock();
+
+  function switchIndex(idx, btn) {
+    document.querySelectorAll('.idx-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentIndex = idx;
+    fetchSignal();
+  }
+
+  function scoreColor(v) { return v > 0.02 ? 'var(--green)' : v < -0.02 ? 'var(--red)' : 'var(--text2)'; }
+  function barPct(v) { return Math.round(Math.min(100, Math.max(0, (v + 1) / 2 * 100))); }
+
+  function setCandle(direction, desc) {
+    const badge = document.getElementById('candle-badge');
+    const descEl = document.getElementById('candle-desc');
+    descEl.textContent = desc;
+    if (direction === 'UP') {
+      badge.textContent = '▲ UP';
+      badge.style.background = 'var(--green-dim)';
+      badge.style.color = 'var(--green)';
+      badge.style.border = '1px solid var(--green-border)';
+    } else if (direction === 'DOWN') {
+      badge.textContent = '▼ DOWN';
+      badge.style.background = 'var(--red-dim)';
+      badge.style.color = 'var(--red)';
+      badge.style.border = '1px solid var(--red-border)';
+    } else {
+      badge.textContent = '↔ SIDEWAYS';
+      badge.style.background = 'var(--amber-dim)';
+      badge.style.color = 'var(--amber)';
+      badge.style.border = '1px solid #ffb83044';
+    }
+  }
+
+  function setSignalStyle(signal) {
+    const s = signal.toLowerCase();
+    const colors = { bullish: '#00d68f', bearish: '#ff4757', neutral: '#ffb830' };
+    const c = colors[s] || '#ffb830';
+    const arrow = document.getElementById('sig-arrow');
+    const word = document.getElementById('sig-word');
+    const conf = document.getElementById('conf-val');
+    const bar = document.getElementById('conf-bar');
+    const svg = document.getElementById('sig-svg');
+    arrow.style.background = s === 'bullish' ? 'var(--green-dim)' : s === 'bearish' ? 'var(--red-dim)' : 'var(--amber-dim)';
+    arrow.style.border = `1px solid ${c}44`;
+    word.style.color = c;
+    conf.style.color = c;
+    bar.style.background = c;
+    if (s === 'bullish') svg.innerHTML = `<path d="M12 19V5M5 12l7-7 7 7" stroke="${c}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    else if (s === 'bearish') svg.innerHTML = `<path d="M12 5v14M19 12l-7 7-7-7" stroke="${c}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    else svg.innerHTML = `<path d="M5 12h14" stroke="${c}" stroke-width="2.5" stroke-linecap="round"/>`;
+  }
+
+  function renderNewsFeed(headlines) {
+    const feed = document.getElementById('news-feed');
+    if (!headlines || headlines.length === 0) {
+      feed.innerHTML = '<div style="font-size:11px;color:var(--text3)">No headlines available.</div>';
+      return;
+    }
+    feed.innerHTML = headlines.map(h => {
+      const sentColor = h.sentiment === 'bullish' ? 'var(--green)' : h.sentiment === 'bearish' ? 'var(--red)' : 'var(--text3)';
+      const sentIcon = h.sentiment === 'bullish' ? '▲' : h.sentiment === 'bearish' ? '▼' : '–';
+      return `<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;background:var(--surface2);border-radius:4px;border:1px solid var(--border);border-left:2px solid ${sentColor}">
+        <span style="font-size:11px;color:${sentColor};flex-shrink:0;margin-top:1px">${sentIcon}</span>
+        <div style="flex:1">
+          <div style="font-size:11px;color:var(--text2);line-height:1.5">${h.title}</div>
+          <div style="font-size:9px;color:var(--text3);margin-top:3px">${h.source} · ${h.published}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function fetchSignal() {
+    if (isFetching) return;
+    isFetching = true;
+    const btn = document.getElementById('refresh-btn');
+    btn.textContent = '↻ LOADING…';
+    btn.disabled = true;
+    document.getElementById('sig-word').textContent = 'LOADING…';
+    document.getElementById('sig-sub').textContent = 'Contacting API…';
+
+    try {
+      const res = await fetch(`${API_BASE}/signal/${currentIndex}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const d = await res.json();
+
+      // Candle direction banner
+      setCandle(d.candle_direction, d.candle_description);
+
+      // Signal
+      setSignalStyle(d.signal);
+      document.getElementById('sig-word').textContent = d.signal;
+      document.getElementById('sig-sub').textContent = `Composite: ${d.composite_score > 0 ? '+' : ''}${d.composite_score}`;
+      document.getElementById('conf-val').textContent = d.confidence_pct + '%';
+      document.getElementById('conf-bar').style.width = d.confidence_pct + '%';
+
+      // Price
+      const chg = d.current_price - d.prev_close;
+      const chgPct = (chg / d.prev_close * 100).toFixed(2);
+      document.getElementById('price-big').textContent = d.current_price.toLocaleString('en-IN');
+      const pEl = document.getElementById('price-chg');
+      pEl.textContent = `${chg >= 0 ? '+' : ''}${chg.toFixed(2)} (${chg >= 0 ? '+' : ''}${chgPct}%)`;
+      pEl.style.color = chg >= 0 ? 'var(--green)' : 'var(--red)';
+      document.getElementById('ts-label').textContent = d.timestamp;
+      document.getElementById('expiry-row').textContent = d.expiry;
+
+      // Update tab chip
+      const chgEl = document.getElementById(currentIndex + '-chg');
+      chgEl.textContent = `${chg >= 0 ? '+' : ''}${chgPct}%`;
+      chgEl.className = 'idx-change ' + (chg >= 0 ? 'up' : 'down');
+
+      // ML proba
+      const ml = d.ml_probabilities;
+      ['bull','neu','bear'].forEach((k, i) => {
+        const pct = Math.round([ml.bullish, ml.neutral, ml.bearish][i] * 100);
+        document.getElementById(`pb-${k}`).textContent = pct + '%';
+        document.getElementById(`pb-${k}-bar`).style.width = pct + '%';
+      });
+
+      // Components
+      const cb = d.component_breakdown;
+      [
+        ['bk-ml', cb.ml_score / 0.45],
+        ['bk-news', cb.news_score / 0.15],
+        ['bk-global', cb.global_score / 0.15],
+        ['bk-vix', cb.vix_regime / 0.10],
+        ['bk-opt', (cb.options_oi || 0) / 0.15],
+      ].forEach(([id, v]) => {
+        v = isFinite(v) ? v : 0;
+        document.getElementById(id).textContent = (v > 0 ? '+' : '') + v.toFixed(2);
+        document.getElementById(id).style.color = scoreColor(v);
+        document.getElementById(id + '-b').style.width = barPct(v) + '%';
+        document.getElementById(id + '-b').style.background = scoreColor(v);
+      });
+
+      // S/R levels
+      if (d.levels) {
+        const lv = d.levels;
+        document.getElementById('sr-pivot').textContent = lv.pivot.toLocaleString('en-IN');
+        document.getElementById('sr-r1').textContent = lv.resistance.r1.toLocaleString('en-IN');
+        document.getElementById('sr-r2').textContent = lv.resistance.r2.toLocaleString('en-IN');
+        document.getElementById('sr-r3').textContent = lv.resistance.r3.toLocaleString('en-IN');
+        document.getElementById('sr-s1').textContent = lv.support.s1.toLocaleString('en-IN');
+        document.getElementById('sr-s2').textContent = lv.support.s2.toLocaleString('en-IN');
+        document.getElementById('sr-s3').textContent = lv.support.s3.toLocaleString('en-IN');
+        document.getElementById('sr-sh').textContent = lv.swing_high.toLocaleString('en-IN');
+        document.getElementById('sr-sl').textContent = lv.swing_low.toLocaleString('en-IN');
+        document.getElementById('sr-ra').textContent = lv.round_above.toLocaleString('en-IN');
+        document.getElementById('sr-rb').textContent = lv.round_below.toLocaleString('en-IN');
+      }
+
+      // Context
+      const ctx = d.context;
+      const vixEl = document.getElementById('ctx-vix');
+      vixEl.textContent = ctx.india_vix;
+      vixEl.style.color = ctx.india_vix > 25 ? 'var(--red)' : ctx.india_vix > 18 ? 'var(--amber)' : 'var(--green)';
+      const nqEl = document.getElementById('ctx-nq');
+      nqEl.textContent = (ctx.nq_futures_change >= 0 ? '+' : '') + ctx.nq_futures_change + '%';
+      nqEl.style.color = ctx.nq_futures_change >= 0 ? 'var(--green)' : 'var(--red)';
+      document.getElementById('ctx-usdinr').textContent = (ctx.usdinr_change >= 0 ? '+' : '') + ctx.usdinr_change;
+      document.getElementById('ctx-pcr').textContent = ctx.pcr_ratio;
+      document.getElementById('ctx-opt-stat').textContent = ctx.options_status;
+      const nsEl = document.getElementById('ctx-news');
+      nsEl.textContent = ctx.news_sentiment >= 0 ? '+' + ctx.news_sentiment : ctx.news_sentiment;
+      nsEl.style.color = ctx.news_sentiment > 0.1 ? 'var(--green)' : ctx.news_sentiment < -0.1 ? 'var(--red)' : 'var(--amber)';
+
+      // Trade + risk
+      document.getElementById('trade-text').textContent = d.suggested_trade;
+      const riskLevel = d.risk_level.split(/[\s\u2014\u2013]/)[0].trim();
+      const riskColors = { HIGH: ['var(--red-dim)', 'var(--red)', 'var(--red-border)'], MEDIUM: ['var(--amber-dim)', 'var(--amber)', '#ffb83044'], LOW: ['var(--green-dim)', 'var(--green)', 'var(--green-border)'] };
+      const rc = riskColors[riskLevel] || riskColors['MEDIUM'];
+      document.getElementById('risk-chip-wrap').innerHTML = `<span style="display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;background:${rc[0]};color:${rc[1]};border:1px solid ${rc[2]}">${d.risk_level}</span>`;
+
+      // News feed
+      renderNewsFeed(ctx.headlines);
+
+      document.getElementById('last-updated').textContent = 'Last updated: ' + new Date().toLocaleTimeString('en-IN');
+
+    } catch (err) {
+      document.getElementById('sig-word').textContent = 'API ERROR';
+      document.getElementById('sig-sub').textContent = 'Make sure FastAPI server is running on localhost:8000';
+      document.getElementById('news-feed').innerHTML = `<div style="font-size:11px;color:var(--red)">${err.message}</div>`;
+      document.getElementById('last-updated').textContent = 'Failed: ' + new Date().toLocaleTimeString('en-IN');
+    }
+
+    btn.textContent = '↻ REFRESH';
+    btn.disabled = false;
+    isFetching = false;
+  }
+
+  fetchSignal();
+  setInterval(fetchSignal, 15 * 60 * 1000);
+
+  // ── SWING / OVERNIGHT ────────────────────────────────────────────────────
+  async function fetchSwing() {
+    const btn   = document.getElementById('sw-btn');
+    const panel = document.getElementById('swing-panel');
+    btn.textContent = '↻ LOADING…'; btn.disabled = true;
+    panel.innerHTML = '<div style="font-size:11px;color:var(--text3)">Fetching daily model + global data…</div>';
+    try {
+      const res = await fetch(`${API_BASE}/swing/${currentIndex}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const d = await res.json();
+
+      const biasColor = d.today_bias === 'BULLISH' ? 'var(--green)' : d.today_bias === 'BEARISH' ? 'var(--red)' : 'var(--amber)';
+      const gapColor  = d.next_open_bias.includes('UP') ? 'var(--green)' : d.next_open_bias.includes('DOWN') ? 'var(--red)' : 'var(--text2)';
+      const riskColor = d.overnight_risk.color === 'red' ? 'var(--red)' : d.overnight_risk.color === 'amber' ? 'var(--amber)' : 'var(--green)';
+      const riskBg    = d.overnight_risk.color === 'red' ? 'var(--red-dim)' : d.overnight_risk.color === 'amber' ? 'var(--amber-dim)' : 'var(--green-dim)';
+
+      const reasons = d.overnight_risk.reasons.length
+        ? d.overnight_risk.reasons.map(r => `<div style="font-size:10px;color:var(--text2);margin-top:3px">• ${r}</div>`).join('')
+        : '<div style="font-size:10px;color:var(--text2);margin-top:3px">No major risk factors detected.</div>';
+
+      const lv = d.daily_levels;
+      const gc = d.global_context;
+
+      panel.innerHTML = `
+        <!-- Top row: bias + gap + overnight risk -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+          <div style="background:var(--surface2);border-radius:4px;padding:12px;border:1px solid var(--border);text-align:center">
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">Today's Bias (Daily Model)</div>
+            <div style="font-size:22px;font-weight:700;color:${biasColor}">${d.today_bias}</div>
+            <div style="display:flex;justify-content:center;gap:10px;margin-top:8px">
+              <span style="font-size:10px;color:var(--green)">▲ ${(d.ml_probabilities.bullish*100).toFixed(0)}%</span>
+              <span style="font-size:10px;color:var(--text3)">– ${(d.ml_probabilities.neutral*100).toFixed(0)}%</span>
+              <span style="font-size:10px;color:var(--red)">▼ ${(d.ml_probabilities.bearish*100).toFixed(0)}%</span>
+            </div>
+          </div>
+          <div style="background:var(--surface2);border-radius:4px;padding:12px;border:1px solid var(--border);text-align:center">
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">Next Open Prediction</div>
+            <div style="font-size:18px;font-weight:700;color:${gapColor}">${d.next_open_bias}</div>
+            ${d.gap_pts_estimate > 0 ? `<div style="font-size:11px;color:var(--text2);margin-top:4px">~${d.gap_pts_estimate} pts estimated</div>` : ''}
+            <div style="font-size:10px;color:var(--text3);margin-top:4px">NQ: ${gc.nq_change_pct >= 0 ? '+' : ''}${gc.nq_change_pct}% · VIX: ${gc.india_vix}</div>
+          </div>
+          <div style="background:${riskBg};border-radius:4px;padding:12px;border:1px solid ${riskColor}44;text-align:center">
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">Overnight Hold Risk</div>
+            <div style="font-size:22px;font-weight:700;color:${riskColor}">${d.overnight_risk.score}/100</div>
+            <div style="font-size:10px;color:${riskColor};margin-top:4px;font-weight:600">${d.overnight_risk.verdict}</div>
+          </div>
+        </div>
+
+        <!-- Risk reasons -->
+        <div style="background:var(--surface2);border-radius:4px;padding:10px;border:1px solid var(--border);margin-bottom:10px">
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">Risk factors</div>
+          ${reasons}
+        </div>
+
+        <!-- Daily levels -->
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:10px">
+          <div style="background:var(--surface2);border-radius:3px;padding:8px;text-align:center;border:1px solid var(--border)"><div style="font-size:9px;color:var(--text3);margin-bottom:3px">EMA20</div><div style="font-size:11px;color:var(--text2)">${lv.ema20.toLocaleString('en-IN')}</div></div>
+          <div style="background:var(--surface2);border-radius:3px;padding:8px;text-align:center;border:1px solid var(--border)"><div style="font-size:9px;color:var(--text3);margin-bottom:3px">EMA50</div><div style="font-size:11px;color:var(--text2)">${lv.ema50.toLocaleString('en-IN')}</div></div>
+          <div style="background:var(--surface2);border-radius:3px;padding:8px;text-align:center;border:1px solid var(--border)"><div style="font-size:9px;color:var(--text3);margin-bottom:3px">EMA200</div><div style="font-size:11px;color:var(--text2)">${lv.ema200.toLocaleString('en-IN')}</div></div>
+          <div style="background:var(--blue-dim);border-radius:3px;padding:8px;text-align:center;border:1px solid #4fa3ff33"><div style="font-size:9px;color:var(--blue);margin-bottom:3px">Wk Pivot</div><div style="font-size:11px;font-weight:600;color:var(--blue)">${lv.weekly_pivot.toLocaleString('en-IN')}</div></div>
+          <div style="background:var(--green-dim);border-radius:3px;padding:8px;text-align:center;border:1px solid var(--green-border)"><div style="font-size:9px;color:var(--green);margin-bottom:3px">Wk R1</div><div style="font-size:11px;color:var(--green)">${lv.weekly_r1.toLocaleString('en-IN')}</div></div>
+          <div style="background:var(--red-dim);border-radius:3px;padding:8px;text-align:center;border:1px solid var(--red-border)"><div style="font-size:9px;color:var(--red);margin-bottom:3px">Wk S1</div><div style="font-size:11px;color:var(--red)">${lv.weekly_s1.toLocaleString('en-IN')}</div></div>
+          <div style="background:var(--surface2);border-radius:3px;padding:8px;text-align:center;border:1px solid var(--border)"><div style="font-size:9px;color:var(--text3);margin-bottom:3px">52W H/L</div><div style="font-size:9px;color:var(--green)">${lv.high_52w.toLocaleString('en-IN')}</div><div style="font-size:9px;color:var(--red)">${lv.low_52w.toLocaleString('en-IN')}</div></div>
+        </div>
+
+        <!-- Swing trade suggestion -->
+        <div style="background:var(--surface2);border-radius:4px;padding:12px;border-left:2px solid var(--blue);border-top:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--blue);text-transform:uppercase;letter-spacing:.15em;margin-bottom:5px">Swing trade setup (1-2 day hold)</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.7">${d.swing_trade}</div>
+        </div>`;
+
+    } catch(err) {
+      panel.innerHTML = `<div style="font-size:11px;color:var(--red)">${err.message}</div>`;
+    }
+    btn.textContent = '↻ RELOAD'; btn.disabled = false;
+  }
+
+  // ── BACKTEST ──────────────────────────────────────────────────────────────
+  async function fetchBacktest() {
+    const btn = document.getElementById('bt-btn');
+    const panel = document.getElementById('backtest-panel');
+    btn.textContent = '↻ LOADING…';
+    btn.disabled = true;
+    panel.innerHTML = '<div style="font-size:11px;color:var(--text3)">Running walk-forward backtest…</div>';
+
+    try {
+      // Try to load; if not trained yet, trigger training first
+      let res = await fetch(`${API_BASE}/backtest/${currentIndex}`);
+      if (res.status === 400) {
+        panel.innerHTML = '<div style="font-size:11px;color:var(--amber)">Training model first… (~60s)</div>';
+        await fetch(`${API_BASE}/train/${currentIndex}`);
+        res = await fetch(`${API_BASE}/backtest/${currentIndex}`);
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const d = await res.json();
+      const bt = d.walk_forward_backtest;
+      const edge = bt.edge_exists;
+      const edgeColor = edge ? 'var(--green)' : 'var(--red)';
+      const edgeLabel = edge ? '✓ EDGE EXISTS' : '✗ WEAK / NO EDGE';
+
+      const sharpeColor = bt.sharpe_ratio > 1.0 ? 'var(--green)' : bt.sharpe_ratio > 0.5 ? 'var(--amber)' : 'var(--red)';
+      const wrColor = parseFloat(bt.win_rate) > 0.55 ? 'var(--green)' : parseFloat(bt.win_rate) > 0.50 ? 'var(--amber)' : 'var(--red)';
+
+      const topFeat = Object.entries(d.top_5_features_by_stability)
+        .map(([k,v]) => `<span style="display:inline-block;padding:2px 7px;margin:2px;background:var(--surface3);border-radius:3px;font-size:9px;color:var(--text2);border:1px solid var(--border)">${k} <span style="color:var(--blue)">${v}</span></span>`)
+        .join('');
+
+      panel.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:10px">
+          <div style="background:var(--surface2);border-radius:4px;padding:10px;border:1px solid ${edgeColor}44;text-align:center">
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">Edge</div>
+            <div style="font-size:12px;font-weight:600;color:${edgeColor}">${edgeLabel}</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:4px;padding:10px;border:1px solid var(--border);text-align:center">
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">Win Rate</div>
+            <div style="font-size:18px;font-weight:600;color:${wrColor}">${(parseFloat(bt.win_rate)*100).toFixed(1)}%</div>
+            <div style="font-size:9px;color:var(--text3);margin-top:2px">>55% = tradeable</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:4px;padding:10px;border:1px solid var(--border);text-align:center">
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">Sharpe Ratio</div>
+            <div style="font-size:18px;font-weight:600;color:${sharpeColor}">${bt.sharpe_ratio}</div>
+            <div style="font-size:9px;color:var(--text3);margin-top:2px">>1.0 = strong</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:4px;padding:10px;border:1px solid var(--border);text-align:center">
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">Signals Tested</div>
+            <div style="font-size:18px;font-weight:600;color:var(--text)">${bt.total_signals}</div>
+            <div style="font-size:9px;color:var(--text3);margin-top:2px">WF folds</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:4px;padding:10px;border:1px solid var(--border);text-align:center">
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">CV Accuracy</div>
+            <div style="font-size:14px;font-weight:600;color:var(--text2)">${d.cv_accuracy}</div>
+            <div style="font-size:9px;color:var(--text3);margin-top:2px">${d.trained_on_bars} bars</div>
+          </div>
+        </div>
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">Stable features (signal/noise ratio)</div>
+        <div>${topFeat}</div>
+        <div style="margin-top:8px;font-size:9px;color:var(--text3)">Calibrated probabilities active — "67% bullish" reflects historical frequency, not raw softmax.</div>`;
+
+    } catch(err) {
+      panel.innerHTML = `<div style="font-size:11px;color:var(--red)">${err.message}</div>`;
+    }
+    btn.textContent = '↻ RELOAD';
+    btn.disabled = false;
+  }
+</script>
+</body>
+</html>

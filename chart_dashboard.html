@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SignalX — Forecast Chart</title>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0c0f;--surface:#111318;--surface2:#181c23;--border:#ffffff12;
+  --text:#f0f2f6;--text2:#8892a4;--text3:#4a5568;
+  --green:#00d68f;--red:#ff4757;--amber:#ffb830;--blue:#4fa3ff;
+  --font:'DM Mono',monospace;
+}
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700&display=swap');
+body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;gap:12px}
+.logo{font-family:'Syne',sans-serif;font-weight:700;font-size:15px;letter-spacing:.05em}
+.logo span{color:var(--green)}
+.tab-group{display:flex}
+.tab{padding:5px 14px;font-family:var(--font);font-size:11px;letter-spacing:.08em;text-transform:uppercase;border:none;background:transparent;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.tab.active{color:var(--green);border-bottom-color:var(--green)}
+.tf-tab{padding:4px 10px;font-size:10px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;border-radius:3px;font-family:var(--font);transition:all .12s;margin-left:3px}
+.tf-tab.active{background:#00d68f18;border-color:var(--green);color:var(--green)}
+.topbar-right{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text3);flex-shrink:0}
+#clock{color:var(--text2)}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 1.5s infinite;display:inline-block;margin-right:4px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* SIGNAL STRIP */
+.signal-strip{display:flex;align-items:stretch;gap:1px;background:var(--border);flex-shrink:0}
+.sig-cell{flex:1;padding:8px 14px;background:var(--surface);display:flex;flex-direction:column;gap:2px}
+.sig-cell-label{font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:.12em}
+.sig-cell-val{font-size:14px;font-weight:600}
+
+/* ALERT BANNER */
+.alert-banner{display:none;align-items:center;gap:14px;padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0;animation:slideIn .3s ease}
+.alert-banner.bullish{background:#00d68f14;border-left:4px solid var(--green)}
+.alert-banner.bearish{background:#ff475714;border-left:4px solid var(--red)}
+@keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+
+/* MAIN */
+.main{display:flex;flex:1;overflow:hidden;gap:1px;background:var(--border)}
+.chart-col{flex:1;display:flex;flex-direction:column;background:var(--bg);min-width:0}
+.chart-label{padding:4px 12px;font-size:9px;color:var(--text3);background:var(--surface);border-bottom:1px solid var(--border);display:flex;gap:16px;align-items:center;flex-shrink:0}
+.legend-dot{width:8px;height:3px;border-radius:1px;display:inline-block;margin-right:4px}
+#candle-chart{flex:1}
+#forecast-chart{height:160px;flex-shrink:0;border-top:1px solid var(--border)}
+
+/* RIGHT PANEL */
+.right{width:260px;flex-shrink:0;background:var(--surface);display:flex;flex-direction:column;overflow-y:auto}
+.rpanel{padding:11px 12px;border-bottom:1px solid var(--border)}
+.rtitle{font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text3);margin-bottom:7px}
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)}
+.info-row:last-child{border-bottom:none}
+.info-key{font-size:10px;color:var(--text3)}
+.info-val{font-size:11px;font-weight:500}
+.big-signal{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;padding:10px 12px;border-radius:4px;text-align:center;margin-bottom:8px}
+.big-signal.UP{background:#00d68f18;color:var(--green);border:1px solid #00d68f44}
+.big-signal.DOWN{background:#ff475718;color:var(--red);border:1px solid #ff475744}
+.big-signal.FLAT{background:#ffb83018;color:var(--amber);border:1px solid #ffb83044}
+.floor-box{background:var(--surface2);border-radius:4px;padding:9px 11px;border:1px solid var(--border);margin-bottom:6px}
+.floor-label{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px}
+.floor-val{font-size:13px;font-weight:600}
+.bottombar{display:flex;align-items:center;justify-content:space-between;padding:5px 16px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0;font-size:10px;color:var(--text3)}
+.refresh-btn{font-family:var(--font);font-size:10px;padding:3px 10px;border:1px solid var(--border);background:transparent;color:var(--text2);border-radius:3px;cursor:pointer}
+.refresh-btn:hover{border-color:var(--green);color:var(--green)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="logo">SIGNAL<span>X</span></div>
+    <div class="tab-group" id="index-tabs">
+      <button class="tab active" onclick="switchIndex('nifty',this)">NIFTY</button>
+      <button class="tab" onclick="switchIndex('banknifty',this)">BANKNIFTY</button>
+      <button class="tab" onclick="switchIndex('sensex',this)">SENSEX</button>
+    </div>
+    <div id="tf-tabs">
+      <button class="tf-tab" onclick="switchTf('5m',this)">5M</button>
+      <button class="tf-tab active" onclick="switchTf('15m',this)">15M</button>
+      <button class="tf-tab" onclick="switchTf('30m',this)">30M</button>
+      <button class="tf-tab" onclick="switchTf('1h',this)">1H</button>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span><span class="live-dot"></span>LIVE</span>
+    <span id="price-display" style="font-size:14px;color:var(--text);font-weight:500">–</span>
+    <span id="chg-display">–</span>
+    <span id="clock">--:--:--</span>
+  </div>
+</div>
+
+<!-- SIGNAL STRIP -->
+<div class="signal-strip">
+  <div class="sig-cell">
+    <div class="sig-cell-label">Next bar prediction</div>
+    <div id="sig-next" class="sig-cell-val" style="color:var(--text3)">–</div>
+  </div>
+  <div class="sig-cell">
+    <div class="sig-cell-label">Expected move</div>
+    <div id="sig-pts" class="sig-cell-val" style="color:var(--text3)">–</div>
+  </div>
+  <div class="sig-cell">
+    <div class="sig-cell-label">Model error (MAE)</div>
+    <div id="sig-mae" class="sig-cell-val" style="color:var(--text3)">–</div>
+  </div>
+  <div class="sig-cell">
+    <div class="sig-cell-label">Direction accuracy</div>
+    <div id="sig-acc" class="sig-cell-val" style="color:var(--text3)">–</div>
+  </div>
+  <div class="sig-cell">
+    <div class="sig-cell-label">Tomorrow bias</div>
+    <div id="sig-tmrw" class="sig-cell-val" style="color:var(--text3)">–</div>
+  </div>
+  <div class="sig-cell">
+    <div class="sig-cell-label">VIX</div>
+    <div id="sig-vix" class="sig-cell-val" style="color:var(--text3)">–</div>
+  </div>
+</div>
+
+<!-- ALERT BANNER -->
+<div class="alert-banner" id="alert-banner">
+  <div id="alert-icon" style="font-size:18px;flex-shrink:0">🚨</div>
+  <div style="flex:1">
+    <div id="alert-text" style="font-size:12px;font-weight:600">–</div>
+    <div id="alert-meta" style="font-size:10px;color:var(--text2);margin-top:2px">–</div>
+  </div>
+  <button onclick="document.getElementById('alert-banner').style.display='none'" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:14px">✕</button>
+</div>
+
+<div class="main">
+  <!-- CHARTS -->
+  <div class="chart-col">
+    <div class="chart-label">
+      <span><span class="legend-dot" style="background:#8892a4"></span>Actual price</span>
+      <span><span class="legend-dot" style="background:#4fa3ff"></span>Predicted (next bar)</span>
+      <span><span class="legend-dot" style="background:#ffb83044;border:1px solid var(--amber)"></span>Error band (±MAE)</span>
+      <span id="pred-bar-info" style="margin-left:auto;font-size:10px;color:var(--text3)">–</span>
+    </div>
+    <div id="candle-chart"></div>
+    <div id="forecast-chart"></div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right">
+
+    <!-- MAIN SIGNAL -->
+    <div class="rpanel">
+      <div id="big-signal" class="big-signal FLAT">LOADING…</div>
+      <div class="floor-box">
+        <div class="floor-label">Support floor (85% confidence)</div>
+        <div id="floor-val" class="floor-val" style="color:var(--red)">–</div>
+        <div style="font-size:9px;color:var(--text3);margin-top:2px">Market unlikely to go below this</div>
+      </div>
+      <div class="floor-box">
+        <div class="floor-label">Resistance ceiling (85% confidence)</div>
+        <div id="ceil-val" class="floor-val" style="color:var(--green)">–</div>
+        <div style="font-size:9px;color:var(--text3);margin-top:2px">Market unlikely to go above this</div>
+      </div>
+    </div>
+
+    <!-- NEXT BAR DETAILS -->
+    <div class="rpanel">
+      <div class="rtitle">Predicted next bar</div>
+      <div class="info-row"><span class="info-key">Open</span><span id="nb-open" class="info-val">–</span></div>
+      <div class="info-row"><span class="info-key">High (est)</span><span id="nb-high" class="info-val" style="color:var(--green)">–</span></div>
+      <div class="info-row"><span class="info-key">Low (est)</span><span id="nb-low" class="info-val" style="color:var(--red)">–</span></div>
+      <div class="info-row"><span class="info-key">Close (est)</span><span id="nb-close" class="info-val">–</span></div>
+      <div class="info-row"><span class="info-key">Move</span><span id="nb-delta" class="info-val">–</span></div>
+    </div>
+
+    <!-- TOMORROW -->
+    <div class="rpanel">
+      <div class="rtitle">Tomorrow forecast</div>
+      <div id="tmrw-panel" style="font-size:10px;color:var(--text3)">Loading…</div>
+    </div>
+
+    <!-- PREMIUM WARNING -->
+    <div class="rpanel">
+      <div class="rtitle">Options premium warning</div>
+      <div id="premium-warn" style="font-size:10px;color:var(--text2);line-height:1.6">–</div>
+    </div>
+
+    <!-- HA SIGNAL -->
+    <div class="rpanel">
+      <div class="rtitle">Heikin-Ashi + MACD</div>
+      <div id="ha-signal-text" style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:4px">–</div>
+      <div id="ha-reasons" style="font-size:10px;color:var(--text2);line-height:1.5">–</div>
+    </div>
+
+    <!-- NEWS -->
+    <div class="rpanel">
+      <div class="rtitle">News <span style="font-size:8px;color:var(--text3)">(context only)</span></div>
+      <div id="news-list" style="display:flex;flex-direction:column;gap:5px"></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="bottombar">
+  <span id="last-updated">–</span>
+  <span>⚠ Not financial advice. MAE=±<span id="mae-inline">?</span>pts. Use stop-losses.</span>
+  <button class="refresh-btn" onclick="refresh()">↻ REFRESH</button>
+</div>
+
+<script>
+const API = 'http://localhost:8001';
+let currentIndex = 'nifty', currentTf = '15m';
+let candleChart, candleSeries, predLine, maeUpper, maeLower;
+let forecastChart, forecastLine, forecastBand;
+let isFetching = false;
+
+// Clock
+setInterval(() => {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+}, 1000);
+
+// ── CHART INIT ──────────────────────────────────────────────────────────────
+function initCharts() {
+  const el = document.getElementById('candle-chart');
+  candleChart = LightweightCharts.createChart(el, {
+    layout:    {background:{color:'#0a0c0f'}, textColor:'#8892a4'},
+    grid:      {vertLines:{color:'#ffffff08'}, horzLines:{color:'#ffffff08'}},
+    crosshair: {mode: LightweightCharts.CrosshairMode.Normal},
+    rightPriceScale: {borderColor:'#ffffff12'},
+    timeScale: {borderColor:'#ffffff12', timeVisible:true, secondsVisible:false},
+    width: el.offsetWidth, height: el.offsetHeight,
+  });
+  candleSeries = candleChart.addCandlestickSeries({
+    upColor:'#00d68f', downColor:'#ff4757',
+    borderUpColor:'#00d68f', borderDownColor:'#ff4757',
+    wickUpColor:'#00d68f', wickDownColor:'#ff4757',
+  });
+  // Predicted close line
+  predLine = candleChart.addLineSeries({
+    color:'#4fa3ff', lineWidth:1, lineStyle:2,
+    lastValueVisible:true, priceLineVisible:false, title:'Predicted',
+  });
+  // MAE band
+  maeUpper = candleChart.addLineSeries({
+    color:'#ffb83044', lineWidth:1, lineStyle:3,
+    lastValueVisible:false, priceLineVisible:false,
+  });
+  maeLower = candleChart.addLineSeries({
+    color:'#ffb83044', lineWidth:1, lineStyle:3,
+    lastValueVisible:false, priceLineVisible:false,
+  });
+
+  // Forecast chart (3-line: actual, predicted, error)
+  const fe = document.getElementById('forecast-chart');
+  forecastChart = LightweightCharts.createChart(fe, {
+    layout:    {background:{color:'#111318'}, textColor:'#4a5568'},
+    grid:      {vertLines:{color:'#ffffff05'}, horzLines:{color:'#ffffff05'}},
+    rightPriceScale: {borderColor:'#ffffff08', scaleMargins:{top:0.1,bottom:0.1}},
+    timeScale: {borderColor:'#ffffff08', timeVisible:true, secondsVisible:false},
+    width: fe.offsetWidth, height: fe.offsetHeight,
+  });
+  forecastLine = forecastChart.addLineSeries({
+    color:'#4fa3ff', lineWidth:1, title:'Pred error',
+    lastValueVisible:true, priceLineVisible:false,
+  });
+
+  window.addEventListener('resize', () => {
+    candleChart.applyOptions({width:el.offsetWidth, height:el.offsetHeight});
+    forecastChart.applyOptions({width:fe.offsetWidth, height:fe.offsetHeight});
+  });
+}
+
+// ── PARSE TIMESTAMP ─────────────────────────────────────────────────────────
+function parseTs(t) {
+  let s = t.replace(' ','T');
+  if (!s.includes('+') && !s.endsWith('Z')) s += '+05:30';
+  return Math.floor(new Date(s).getTime()/1000);
+}
+
+// ── LOAD CANDLES ─────────────────────────────────────────────────────────────
+async function loadCandles() {
+  try {
+    const r = await fetch(`${API}/candles/${currentIndex}?tf=${currentTf}&bars=120`);
+    if (!r.ok) return;
+    const d = await r.json();
+    const data = d.candles.map(c => {
+      const ts = parseTs(c.t);
+      return {time:ts, open:c.o, high:c.h, low:c.l, close:c.c};
+    }).filter(c => !isNaN(c.time) && c.time>0);
+    data.sort((a,b)=>a.time-b.time);
+    const seen=new Set();
+    const uniq = data.filter(c=>{if(seen.has(c.time))return false;seen.add(c.time);return true;});
+    if (uniq.length>0) {
+      candleSeries.setData(uniq);
+
+      // Draw predicted next candle as ghost
+      if (d.next_candle && d.next_candle.predicted) {
+        const nc = d.next_candle;
+        const tfMins = {'5m':5,'15m':15,'30m':30,'1h':60};
+        const nextTs = uniq[uniq.length-1].time + (tfMins[currentTf]||15)*60;
+        candleSeries.update({time:nextTs, open:nc.open, high:nc.high, low:nc.low, close:nc.close});
+        const dir = nc.direction;
+        document.getElementById('pred-bar-info').textContent =
+          `Ghost bar: ${dir} ${nc.confidence}% confident`;
+        document.getElementById('pred-bar-info').style.color =
+          dir==='UP' ? 'var(--green)' : dir==='DOWN' ? 'var(--red)' : 'var(--text3)';
+      }
+      candleChart.timeScale().fitContent();
+    }
+    return uniq;
+  } catch(e) { console.error('Candles:', e); }
+}
+
+// ── LOAD FORECAST ────────────────────────────────────────────────────────────
+async function loadForecast() {
+  try {
+    const r = await fetch(`${API}/forecast/${currentIndex}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    const cd = d.chart_data;
+
+    // Update signal strip
+    const sig = d.signal;
+    const sigColor = sig==='UP' ? 'var(--green)' : sig==='DOWN' ? 'var(--red)' : 'var(--amber)';
+    document.getElementById('sig-next').textContent = sig==='UP' ? '▲ UP' : sig==='DOWN' ? '▼ DOWN' : '↔ FLAT';
+    document.getElementById('sig-next').style.color = sigColor;
+    document.getElementById('sig-pts').textContent = `${d.signal_pts > 0 ? (sig==='DOWN'?'-':'+') : ''}${d.signal_pts} pts`;
+    document.getElementById('sig-pts').style.color = sigColor;
+    document.getElementById('sig-mae').textContent = `±${d.mae_pts} pts`;
+    document.getElementById('sig-acc').textContent = `${d.dir_accuracy}%`;
+    document.getElementById('sig-acc').style.color = d.dir_accuracy>52 ? 'var(--green)' : 'var(--amber)';
+    document.getElementById('mae-inline').textContent = d.mae_pts;
+
+    // Big signal box
+    const bs = document.getElementById('big-signal');
+    bs.className = `big-signal ${sig}`;
+    bs.textContent = sig==='UP' ? `▲ UP +${d.signal_pts} pts` : sig==='DOWN' ? `▼ DOWN -${d.signal_pts} pts` : `↔ FLAT ±${d.signal_pts} pts`;
+
+    // Floor / ceiling
+    document.getElementById('floor-val').textContent = d.support_floor.toLocaleString('en-IN');
+    document.getElementById('ceil-val').textContent  = d.resist_ceiling.toLocaleString('en-IN');
+
+    // Next bar details
+    const nb = d.next_bar;
+    document.getElementById('nb-open').textContent  = nb.open.toLocaleString('en-IN');
+    document.getElementById('nb-high').textContent  = nb.high.toLocaleString('en-IN');
+    document.getElementById('nb-low').textContent   = nb.low.toLocaleString('en-IN');
+    document.getElementById('nb-close').textContent = nb.close.toLocaleString('en-IN');
+    const deltaEl = document.getElementById('nb-delta');
+    deltaEl.textContent = `${nb.delta >= 0 ? '+' : ''}${nb.delta} pts`;
+    deltaEl.style.color = nb.delta >= 0 ? 'var(--green)' : 'var(--red)';
+
+    // Draw predicted line + MAE band on candle chart
+    const predData = [], upperData = [], lowerData = [];
+    cd.timestamps.forEach((t, i) => {
+      const ts = parseTs(t);
+      if (isNaN(ts) || ts <= 0) return;
+      predData.push({time:ts, value:cd.predicted[i]});
+      upperData.push({time:ts, value:cd.mae_upper[i]});
+      lowerData.push({time:ts, value:cd.mae_lower[i]});
+    });
+    predData.sort((a,b)=>a.time-b.time);
+    upperData.sort((a,b)=>a.time-b.time);
+    lowerData.sort((a,b)=>a.time-b.time);
+    if (predData.length > 0) {
+      predLine.setData(predData);
+      maeUpper.setData(upperData);
+      maeLower.setData(lowerData);
+    }
+
+    // Forecast chart: prediction error over time
+    const errData = cd.timestamps.map((t,i) => {
+      const ts = parseTs(t);
+      if (isNaN(ts)||ts<=0) return null;
+      return {time:ts, value: Math.abs(cd.actual[i] - cd.predicted[i])};
+    }).filter(Boolean).sort((a,b)=>a.time-b.time);
+    if (errData.length > 0) forecastLine.setData(errData);
+
+    // Tomorrow
+    const nd = d.next_day;
+    const tmEl = document.getElementById('tmrw-panel');
+    if (nd) {
+      const bc = nd.bias==='BULLISH' ? 'var(--green)' : nd.bias==='BEARISH' ? 'var(--red)' : 'var(--amber)';
+      tmEl.innerHTML = `
+        <div style="font-size:13px;font-weight:600;color:${bc};margin-bottom:6px">${nd.bias}</div>
+        <div class="info-row"><span class="info-key">Up probability</span><span class="info-val" style="color:var(--green)">${nd.up_probability}%</span></div>
+        <div class="info-row"><span class="info-key">Down probability</span><span class="info-val" style="color:var(--red)">${nd.down_probability}%</span></div>
+        <div class="info-row"><span class="info-key">Expected range</span><span class="info-val">±${nd.expected_range_pts} pts</span></div>
+        <div class="info-row"><span class="info-key">Target up</span><span class="info-val" style="color:var(--green)">${nd.target_up.toLocaleString('en-IN')}</span></div>
+        <div class="info-row"><span class="info-key">Target down</span><span class="info-val" style="color:var(--red)">${nd.target_down.toLocaleString('en-IN')}</span></div>`;
+      document.getElementById('sig-tmrw').textContent = nd.bias;
+      document.getElementById('sig-tmrw').style.color = bc;
+    }
+
+    // Alert for big moves
+    if (d.signal_pts >= 20 && sig !== 'FLAT') {
+      const banner = document.getElementById('alert-banner');
+      banner.className = `alert-banner ${sig==='UP'?'bullish':'bearish'}`;
+      banner.style.display = 'flex';
+      document.getElementById('alert-icon').textContent = sig==='UP' ? '🚀' : '🔻';
+      document.getElementById('alert-text').innerHTML =
+        `<strong>MOVE ALERT: ${sig} ${d.signal_pts} pts predicted</strong>`;
+      document.getElementById('alert-meta').textContent =
+        `Floor: ${d.support_floor.toLocaleString('en-IN')} | Ceiling: ${d.resist_ceiling.toLocaleString('en-IN')} | MAE: ±${d.mae_pts} pts`;
+      playBeep(sig==='UP' ? 880 : 440);
+    }
+
+    document.getElementById('last-updated').textContent =
+      'Updated: ' + new Date().toLocaleTimeString('en-IN');
+
+  } catch(e) {
+    console.error('Forecast:', e);
+    document.getElementById('big-signal').textContent = 'API ERROR';
+  }
+}
+
+// ── LOAD ALERT (HA + VIX) ────────────────────────────────────────────────────
+async function loadAlert() {
+  try {
+    const r = await fetch(`${API}/alert/${currentIndex}`);
+    if (!r.ok) return;
+    const d = await r.json();
+
+    // VIX
+    const vixEl = document.getElementById('sig-vix');
+    vixEl.textContent = d.vix;
+    vixEl.style.color = d.vix>25 ? 'var(--red)' : d.vix>20 ? 'var(--amber)' : 'var(--green)';
+
+    // Premium warning
+    if (d.premium_warning) {
+      const pw = document.getElementById('premium-warn');
+      const isWarn = d.premium_warning.includes('CRUSH') || d.premium_warning.includes('⚠');
+      pw.style.color = isWarn ? 'var(--red)' : d.premium_warning.includes('cheap') ? 'var(--green)' : 'var(--amber)';
+      pw.textContent = d.premium_warning;
+    }
+
+    // HA signal
+    const ha = d.ha_signal || {};
+    const haColor = ha.signal==='UP' ? 'var(--green)' : ha.signal==='DOWN' ? 'var(--red)' : 'var(--text3)';
+    document.getElementById('ha-signal-text').textContent =
+      ha.signal==='UP' ? `▲ BULLISH (${ha.strength}/7)` :
+      ha.signal==='DOWN' ? `▼ BEARISH (${ha.strength}/7)` : `↔ WAIT (${ha.strength}/7)`;
+    document.getElementById('ha-signal-text').style.color = haColor;
+    document.getElementById('ha-reasons').textContent = (ha.reasons||[]).join(' · ');
+
+    // News
+    const heads = (d.news && d.news.headlines) || [];
+    document.getElementById('news-list').innerHTML = heads.slice(0,3).map(h => {
+      const sc = h.sentiment==='bullish' ? 'var(--green)' : h.sentiment==='bearish' ? 'var(--red)' : 'var(--text3)';
+      return `<div style="display:flex;gap:6px;padding:5px 7px;background:var(--surface2);border-radius:3px;border-left:2px solid ${sc}">
+        <span style="color:${sc};font-size:10px;flex-shrink:0">${h.sentiment==='bullish'?'▲':h.sentiment==='bearish'?'▼':'–'}</span>
+        <div>
+          <div style="font-size:10px;color:var(--text2);line-height:1.4">${h.title}</div>
+          <div style="font-size:9px;color:var(--text3);margin-top:1px">${h.source} · ${h.published}</div>
+        </div>
+      </div>`;
+    }).join('') || '<div style="font-size:10px;color:var(--text3)">No headlines</div>';
+
+  } catch(e) { console.error('Alert:', e); }
+}
+
+// ── PRICE TICK ───────────────────────────────────────────────────────────────
+async function tickPrice() {
+  try {
+    const r = await fetch(`${API}/price/${currentIndex}`);
+    if (!r.ok) return;
+    const d = await r.json();
+    const chg = d.price - d.prev_close;
+    const pct = (chg/d.prev_close*100).toFixed(2);
+    document.getElementById('price-display').textContent = d.price.toLocaleString('en-IN');
+    const ce = document.getElementById('chg-display');
+    ce.textContent = `${chg>=0?'+':''}${chg.toFixed(1)} (${chg>=0?'+':''}${pct}%)`;
+    ce.style.color = chg>=0 ? 'var(--green)' : 'var(--red)';
+    if (candleSeries && d.price) {
+      let ts = d.timestamp.replace(' ','T');
+      if (!ts.includes('+') && !ts.endsWith('Z')) ts += '+05:30';
+      const t = Math.floor(new Date(ts).getTime()/1000);
+      if (!isNaN(t) && t>0)
+        candleSeries.update({time:t, open:d.open, high:d.high, low:d.low, close:d.price});
+    }
+  } catch(e) {}
+}
+
+// ── BEEP ─────────────────────────────────────────────────────────────────────
+function playBeep(freq=800) {
+  try {
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value=freq; o.type='sine';
+    g.gain.setValueAtTime(0.3,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.4);
+    o.start(ctx.currentTime); o.stop(ctx.currentTime+0.4);
+  } catch(e){}
+}
+
+// ── SWITCH ───────────────────────────────────────────────────────────────────
+function switchIndex(idx, btn) {
+  document.querySelectorAll('#index-tabs .tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active'); currentIndex=idx; refresh();
+}
+function switchTf(tf, btn) {
+  document.querySelectorAll('#tf-tabs .tf-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active'); currentTf=tf;
+  if (candleSeries) candleSeries.setData([]);
+  loadCandles();
+}
+
+// ── REFRESH ──────────────────────────────────────────────────────────────────
+async function refresh() {
+  if (isFetching) return;
+  isFetching = true;
+  await Promise.all([loadCandles(), loadForecast(), loadAlert()]);
+  isFetching = false;
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+initCharts();
+refresh();
+setInterval(tickPrice, 20000);          // price every 20s
+setInterval(loadCandles, 60000);        // candles every 1 min
+setInterval(loadForecast, 5*60*1000);   // forecast every 5 min (only when big move expected)
+setInterval(loadAlert, 5*60*1000);      // alert scan every 5 min
+</script>
+</body>
+</html>
