@@ -78,12 +78,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
       <button class="tab" onclick="switchIndex('banknifty',this)">BANKNIFTY</button>
       <button class="tab" onclick="switchIndex('sensex',this)">SENSEX</button>
     </div>
-    <div id="tf-tabs">
-      <button class="tf-tab" onclick="switchTf('5m',this)">5M</button>
-      <button class="tf-tab active" onclick="switchTf('15m',this)">15M</button>
-      <button class="tf-tab" onclick="switchTf('30m',this)">30M</button>
-      <button class="tf-tab" onclick="switchTf('1h',this)">1H</button>
-    </div>
   </div>
   <div class="topbar-right">
     <span><span class="live-dot"></span>LIVE</span>
@@ -499,12 +493,6 @@ function playBeep(freq=800) {
 function switchIndex(idx, btn) {
   document.querySelectorAll('#index-tabs .tab').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active'); currentIndex=idx; refresh();
-}
-function switchTf(tf, btn) {
-  document.querySelectorAll('#tf-tabs .tf-tab').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active'); currentTf=tf;
-  if (candleSeries) candleSeries.setData([]);
-  loadCandles();
 }
 
 // ── REFRESH ──────────────────────────────────────────────────────────────────

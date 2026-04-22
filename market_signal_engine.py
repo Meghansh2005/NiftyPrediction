@@ -1598,21 +1598,24 @@ def forecast_endpoint(index: str):
 
 @app.on_event("startup")
 async def startup_event():
-    """Train 12 intraday models + 3 daily models + 3 regression models."""
+    """
+    Train models on startup.
+    Only trains 15m intraday (best for 20-40pt moves), daily, and regression.
+    Skips 5m/30m/1h — they added noise without improving accuracy.
+    """
     for idx in TICKERS:
-        for tf_key in TIMEFRAMES:
-            try:
-                logger.info(f"Training intraday: {idx}/{tf_key}...")
-                train_model(idx, tf_key)
-            except Exception as e:
-                logger.warning(f"Intraday train failed {idx}/{tf_key}: {e}")
         try:
-            logger.info(f"Training daily: {idx}...")
+            logger.info(f"Training 15m model: {idx}...")
+            train_model(idx, "15m")
+        except Exception as e:
+            logger.warning(f"15m train failed {idx}: {e}")
+        try:
+            logger.info(f"Training daily model: {idx}...")
             _train_daily_model(idx)
         except Exception as e:
             logger.warning(f"Daily train failed {idx}: {e}")
         try:
-            logger.info(f"Training regression: {idx}...")
+            logger.info(f"Training regression model: {idx}...")
             train_regression_model(idx)
         except Exception as e:
             logger.warning(f"Regression train failed {idx}: {e}")
