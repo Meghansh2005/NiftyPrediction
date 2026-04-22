@@ -150,8 +150,9 @@ def predict_stock(ticker: str) -> dict:
     df.dropna(inplace=True)
 
     X = df[FEAT_COLS]; y = df["target"]
-    mask = X.notna().all(axis=1) & np.isfinite(X).all(axis=1)
-    X, y = X[mask], y[mask]
+    # Use positional indexing to avoid index alignment issues
+    valid = X.notna().all(axis=1) & np.isfinite(X.values).all(axis=1)
+    X = X.loc[valid]; y = y.loc[valid]
 
     if len(X) < 50:
         return {"error": "Not enough bars after feature computation"}
@@ -173,10 +174,10 @@ def predict_stock(ticker: str) -> dict:
     dir_acc = float(((pred_te>0)==(y_te.values>0)).mean())
 
     # Predict all historical bars (for chart overlay)
-    pred_all = model.predict(X)
-    actual_prices = close[mask].values
-    pred_prices   = actual_prices * (1 + pred_all)  # predicted next-day close
-    timestamps    = [str(t) for t in df[mask].index]
+    pred_all      = model.predict(X)
+    actual_prices = df.loc[X.index, "Close"].values
+    pred_prices   = actual_prices * (1 + pred_all)
+    timestamps    = [str(t) for t in X.index]
 
     # Predict next 5 days
     curr_price = float(close.iloc[-1])
@@ -186,12 +187,12 @@ def predict_stock(ticker: str) -> dict:
         delta = float(model.predict(last_row.reshape(1,-1))[0])
         next_p = future_prices[-1] * (1 + delta)
         future_prices.append(round(next_p, 2))
-    future_prices = future_prices[1:]  # remove current
+    future_prices = future_prices[1:]
 
-    # Rolling MAE band
-    errors = np.abs(actual_prices[1:] - pred_prices[:-1]) if len(actual_prices)>1 else np.array([0])
+    # Rolling MAE band (in price points)
+    errors      = np.abs(actual_prices - pred_prices)
     rolling_mae = pd.Series(errors).rolling(10).mean().fillna(float(errors.mean())).values
-    mae_pts = float(curr_price * mae_pct)
+    mae_pts     = float(curr_price * mae_pct)
 
     return {
         "mae_pct":      round(mae_pct*100, 2),
@@ -201,8 +202,8 @@ def predict_stock(ticker: str) -> dict:
             "timestamps": timestamps,
             "actual":     [round(float(p),2) for p in actual_prices],
             "predicted":  [round(float(p),2) for p in pred_prices],
-            "mae_upper":  [round(float(actual_prices[i]+rolling_mae[min(i,len(rolling_mae)-1)]*curr_price),2) for i in range(len(actual_prices))],
-            "mae_lower":  [round(float(actual_prices[i]-rolling_mae[min(i,len(rolling_mae)-1)]*curr_price),2) for i in range(len(actual_prices))],
+            "mae_upper":  [round(float(actual_prices[i]+rolling_mae[i]),2) for i in range(len(actual_prices))],
+            "mae_lower":  [round(float(actual_prices[i]-rolling_mae[i]),2) for i in range(len(actual_prices))],
         },
         "next_5_days": future_prices,
         "signal": "UP" if future_prices[-1] > curr_price else "DOWN",
