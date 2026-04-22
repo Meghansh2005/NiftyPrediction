@@ -8,7 +8,7 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0a0c0f;--surface:#111318;--surface2:#181c23;--border:#ffffff12;
+  --bg:#0a0c0f;--surface:#111318;--surface2:#404752;--border:#ffffff12;
   --text:#f0f2f6;--text2:#8892a4;--text3:#4a5568;
   --green:#00d68f;--red:#ff4757;--amber:#ffb830;--blue:#4fa3ff;
   --font:'DM Mono',monospace;
@@ -208,6 +208,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
 
 <script>
 const API = 'http://localhost:8001';
+const SIMPLE_API = 'http://localhost:8002';
 let currentIndex = 'nifty', currentTf = '15m';
 let candleChart, candleSeries, predLine, maeUpper, maeLower;
 let forecastChart, forecastLine, forecastBand;

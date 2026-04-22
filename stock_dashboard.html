@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StockX — NSE Screener</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0c0f;--surface:#111318;--surface2:#1a1d24;--border:#ffffff12;
+  --text:#f0f2f6;--text2:#8892a4;--text3:#4a5568;
+  --green:#00d68f;--red:#ff4757;--amber:#ffb830;--blue:#4fa3ff;
+  --font:'DM Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;display:flex;flex-direction:column}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;gap:16px}
+.logo{font-family:'Syne',sans-serif;font-weight:700;font-size:17px;letter-spacing:.05em}
+.logo span{color:var(--green)}
+.search-wrap{display:flex;gap:8px;flex:1;max-width:420px}
+.search-input{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:12px;padding:7px 12px;border-radius:4px;outline:none;transition:border .15s}
+.search-input:focus{border-color:var(--green)}
+.search-input::placeholder{color:var(--text3)}
+.search-btn{padding:7px 16px;background:transparent;border:1px solid var(--green);color:var(--green);font-family:var(--font);font-size:11px;border-radius:4px;cursor:pointer;letter-spacing:.08em;transition:all .15s}
+.search-btn:hover{background:#00d68f18}
+.topbar-right{font-size:11px;color:var(--text3)}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 1.5s infinite;display:inline-block;margin-right:4px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* SEARCH RESULTS DROPDOWN */
+.search-results{position:absolute;top:52px;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:4px;z-index:100;max-height:280px;overflow-y:auto;display:none}
+.search-result-item{padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;transition:background .1s}
+.search-result-item:hover{background:var(--surface2)}
+.search-result-item:last-child{border-bottom:none}
+.search-wrap{position:relative}
+
+/* TABS */
+.tab-bar{display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
+.tab{padding:10px 22px;font-family:var(--font);font-size:11px;letter-spacing:.1em;text-transform:uppercase;border:none;background:transparent;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.tab.active{color:var(--green);border-bottom-color:var(--green)}
+
+/* MAIN CONTENT */
+.content{flex:1;padding:20px;overflow-y:auto}
+
+/* TOP MOVERS */
+.movers-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.movers-col-title{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--text3);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.stock-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px 14px;cursor:pointer;transition:all .15s;margin-bottom:8px}
+.stock-card:hover{border-color:var(--green);background:var(--surface2)}
+.card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
+.card-symbol{font-family:'Syne',sans-serif;font-size:13px;font-weight:700}
+.card-name{font-size:10px;color:var(--text3);margin-top:1px}
+.card-price{font-size:14px;font-weight:500;text-align:right}
+.card-change{font-size:11px;text-align:right;margin-top:1px}
+.card-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.signal-badge{font-size:9px;padding:2px 8px;border-radius:3px;letter-spacing:.08em;font-weight:500}
+.signal-badge.BULLISH{background:#00d68f18;color:var(--green);border:1px solid #00d68f33}
+.signal-badge.BEARISH{background:#ff475718;color:var(--red);border:1px solid #ff475733}
+.signal-badge.NEUTRAL{background:#ffb83018;color:var(--amber);border:1px solid #ffb83033}
+.card-52w{font-size:9px;color:var(--text3)}
+
+/* STOCK DETAIL */
+.detail-wrap{max-width:860px}
+.detail-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px}
+.detail-symbol{font-family:'Syne',sans-serif;font-size:26px;font-weight:700}
+.detail-name{font-size:12px;color:var(--text3);margin-top:3px}
+.detail-price{font-size:28px;font-weight:500;text-align:right}
+.detail-change{font-size:13px;text-align:right;margin-top:3px}
+
+/* 52W RANGE BAR */
+.range-wrap{margin:16px 0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:14px 16px}
+.range-label{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+.range-bar-outer{height:4px;background:var(--surface2);border-radius:2px;position:relative;margin:8px 0}
+.range-bar-fill{height:100%;background:linear-gradient(90deg,var(--red),var(--amber),var(--green));border-radius:2px}
+.range-bar-dot{width:10px;height:10px;border-radius:50%;background:var(--text);border:2px solid var(--bg);position:absolute;top:-3px;transform:translateX(-50%)}
+.range-ends{display:flex;justify-content:space-between;font-size:10px;color:var(--text3)}
+
+/* SIGNAL BOX */
+.signal-box{padding:16px;border-radius:6px;margin-bottom:20px;border:1px solid}
+.signal-box.BULLISH{background:#00d68f0d;border-color:#00d68f33}
+.signal-box.BEARISH{background:#ff47570d;border-color:#ff475733}
+.signal-box.NEUTRAL{background:#ffb8300d;border-color:#ffb83033}
+.signal-big{font-family:'Syne',sans-serif;font-size:22px;font-weight:700;margin-bottom:6px}
+.signal-reason{font-size:11px;color:var(--text2);line-height:1.5}
+
+/* STATS GRID */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px 14px}
+.stat-label{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
+.stat-val{font-size:14px;font-weight:500}
+
+/* NEWS */
+.news-title{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px}
+.news-item{display:flex;gap:10px;padding:10px 12px;background:var(--surface);border-radius:5px;border-left:2px solid;margin-bottom:7px}
+.news-item.bullish{border-color:var(--green)}
+.news-item.bearish{border-color:var(--red)}
+.news-item.neutral{border-color:var(--text3)}
+.news-icon{font-size:11px;flex-shrink:0;margin-top:1px}
+.news-text{font-size:10px;color:var(--text2);line-height:1.5}
+.news-meta{font-size:9px;color:var(--text3);margin-top:3px}
+
+/* EVENTS NOTE */
+.events-note{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px 14px;font-size:11px;color:var(--text2);margin-top:16px;border-left:3px solid var(--amber)}
+
+/* LOADING / EMPTY */
+.loading{text-align:center;padding:40px;color:var(--text3);font-size:12px}
+.spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;margin-bottom:10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* REFRESH NOTE */
+.refresh-note{font-size:9px;color:var(--text3);text-align:right;padding:6px 20px;border-top:1px solid var(--border);background:var(--surface)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">STOCK<span>X</span></div>
+  <div class="search-wrap">
+    <input class="search-input" id="search-input" type="text" placeholder="Search stocks… e.g. Reliance, TCS"
+      oninput="onSearchInput()" onkeydown="if(event.key==='Enter')doSearch()">
+    <button class="search-btn" onclick="doSearch()">SEARCH</button>
+    <div class="search-results" id="search-results"></div>
+  </div>
+  <div class="topbar-right"><span class="live-dot"></span>NSE · Auto-refresh 5 min</div>
+</div>
+
+<div class="tab-bar">
+  <button class="tab active" id="tab-movers" onclick="switchTab('movers')">Top Movers</button>
+  <button class="tab" id="tab-detail" onclick="switchTab('detail')">Stock Detail</button>
+</div>
+
+<div class="content" id="content-movers">
+  <div class="loading" id="movers-loading">
+    <div class="spinner"></div><br>Fetching top movers…
+  </div>
+  <div class="movers-grid" id="movers-grid" style="display:none"></div>
+</div>
+
+<div class="content" id="content-detail" style="display:none">
+  <div class="loading" id="detail-loading" style="display:none">
+    <div class="spinner"></div><br>Loading stock data…
+  </div>
+  <div class="detail-wrap" id="detail-content">
+    <div style="color:var(--text3);font-size:12px;padding:40px 0">
+      Search for a stock or click a card from Top Movers.
+    </div>
+  </div>
+</div>
+
+<div class="refresh-note" id="refresh-note">–</div>
+
+<script>
+const API = 'http://localhost:8003';
+let moversData = null;
+let searchTimeout = null;
+
+// ── TAB SWITCH ────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.getElementById('content-movers').style.display = tab === 'movers' ? 'block' : 'none';
+  document.getElementById('content-detail').style.display = tab === 'detail' ? 'block' : 'none';
+  document.getElementById('tab-movers').classList.toggle('active', tab === 'movers');
+  document.getElementById('tab-detail').classList.toggle('active', tab === 'detail');
+}
+
+// ── FORMAT HELPERS ────────────────────────────────────────────────────────────
+function fmtPrice(p) {
+  if (!p && p !== 0) return '–';
+  return '₹' + Number(p).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function fmtCap(v) {
+  if (!v) return '–';
+  if (v >= 1e12) return '₹' + (v/1e12).toFixed(2) + 'T';
+  if (v >= 1e9)  return '₹' + (v/1e9).toFixed(2) + 'B';
+  if (v >= 1e7)  return '₹' + (v/1e7).toFixed(2) + 'Cr';
+  return '₹' + v.toLocaleString('en-IN');
+}
+function chgColor(pct) {
+  return pct >= 0 ? 'var(--green)' : 'var(--red)';
+}
+function chgStr(pct) {
+  return (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+}
+function signalColor(s) {
+  return s === 'BULLISH' ? 'var(--green)' : s === 'BEARISH' ? 'var(--red)' : 'var(--amber)';
+}
+
+// ── STOCK CARD ────────────────────────────────────────────────────────────────
+function stockCardHTML(stock, signal) {
+  const sig = signal || 'NEUTRAL';
+  return `
+    <div class="stock-card" onclick="loadStock('${stock.symbol}')">
+      <div class="card-top">
+        <div>
+          <div class="card-symbol">${stock.symbol}</div>
+          <div class="card-name">${stock.name || stock.symbol}</div>
+        </div>
+        <div>
+          <div class="card-price">${fmtPrice(stock.price)}</div>
+          <div class="card-change" style="color:${chgColor(stock.change_pct)}">${chgStr(stock.change_pct)}</div>
+        </div>
+      </div>
+      <div class="card-bottom">
+        <span class="signal-badge ${sig}">${sig}</span>
+        <span class="card-52w">52W: ${fmtPrice(stock.week52_low)} – ${fmtPrice(stock.week52_high)}</span>
+      </div>
+    </div>`;
+}
+
+// ── LOAD TOP MOVERS ───────────────────────────────────────────────────────────
+async function loadMovers() {
+  document.getElementById('movers-loading').style.display = 'block';
+  document.getElementById('movers-grid').style.display = 'none';
+  try {
+    const r = await fetch(`${API}/top-movers`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    moversData = d;
+
+    const grid = document.getElementById('movers-grid');
+    const gainersHTML = d.gainers.map(s => stockCardHTML(s, 'BULLISH')).join('');
+    const losersHTML  = d.losers.map(s => stockCardHTML(s, 'BEARISH')).join('');
+
+    grid.innerHTML = `
+      <div>
+        <div class="movers-col-title">Top Gainers 🟢</div>
+        ${gainersHTML}
+      </div>
+      <div>
+        <div class="movers-col-title">Top Losers 🔴</div>
+        ${losersHTML}
+      </div>`;
+
+    document.getElementById('movers-loading').style.display = 'none';
+    grid.style.display = 'grid';
+    document.getElementById('refresh-note').textContent =
+      'Last updated: ' + new Date().toLocaleTimeString('en-IN') + ' · Next refresh in 5 min';
+  } catch(e) {
+    document.getElementById('movers-loading').innerHTML =
+      `<div style="color:var(--red)">Failed to load: ${e.message}</div>`;
+  }
+}
+
+// ── LOAD STOCK DETAIL ─────────────────────────────────────────────────────────
+async function loadStock(symbol) {
+  switchTab('detail');
+  document.getElementById('detail-loading').style.display = 'block';
+  document.getElementById('detail-content').innerHTML = '';
+
+  try {
+    const r = await fetch(`${API}/stock/${symbol}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    renderDetail(d);
+  } catch(e) {
+    document.getElementById('detail-content').innerHTML =
+      `<div style="color:var(--red);padding:20px">Failed to load ${symbol}: ${e.message}</div>`;
+  } finally {
+    document.getElementById('detail-loading').style.display = 'none';
+  }
+}
+
+function renderDetail(d) {
+  const sigColor = signalColor(d.signal);
+  const sigIcon = d.signal === 'BULLISH' ? '▲' : d.signal === 'BEARISH' ? '▼' : '↔';
+
+  // 52w range bar position
+  const range = d.week52_high - d.week52_low;
+  const pos = range > 0 ? Math.min(100, Math.max(0, (d.price - d.week52_low) / range * 100)) : 50;
+
+  // News HTML
+  const newsHTML = (d.news || []).map(n => {
+    const icon = n.sentiment === 'bullish' ? '▲' : n.sentiment === 'bearish' ? '▼' : '–';
+    return `<div class="news-item ${n.sentiment}">
+      <span class="news-icon" style="color:${n.sentiment==='bullish'?'var(--green)':n.sentiment==='bearish'?'var(--red)':'var(--text3)'}">${icon}</span>
+      <div>
+        <div class="news-text">${n.title}</div>
+        <div class="news-meta">${n.source} · ${n.published}</div>
+      </div>
+    </div>`;
+  }).join('') || '<div style="font-size:11px;color:var(--text3)">No recent news found.</div>';
+
+  document.getElementById('detail-content').innerHTML = `
+    <div class="detail-wrap">
+      <div class="detail-header">
+        <div>
+          <div class="detail-symbol">${d.symbol}</div>
+          <div class="detail-name">${d.name || d.symbol}</div>
+        </div>
+        <div>
+          <div class="detail-price">${fmtPrice(d.price)}</div>
+          <div class="detail-change" style="color:${chgColor(d.change_pct)}">${chgStr(d.change_pct)} (${d.change >= 0 ? '+' : ''}${(d.change||0).toFixed(2)})</div>
+        </div>
+      </div>
+
+      <div class="range-wrap">
+        <div class="range-label">52-Week Range</div>
+        <div class="range-bar-outer">
+          <div class="range-bar-fill" style="width:100%"></div>
+          <div class="range-bar-dot" style="left:${pos}%"></div>
+        </div>
+        <div class="range-ends">
+          <span style="color:var(--red)">${fmtPrice(d.week52_low)} Low</span>
+          <span style="color:var(--text2)">Current: ${fmtPrice(d.price)}</span>
+          <span style="color:var(--green)">${fmtPrice(d.week52_high)} High</span>
+        </div>
+      </div>
+
+      <div class="signal-box ${d.signal}">
+        <div class="signal-big" style="color:${sigColor}">${sigIcon} ${d.signal}</div>
+        <div class="signal-reason">${d.signal_reason || '–'}</div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">PE Ratio</div>
+          <div class="stat-val">${d.pe_ratio ? d.pe_ratio.toFixed(1) : '–'}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Market Cap</div>
+          <div class="stat-val">${fmtCap(d.market_cap)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Sector</div>
+          <div class="stat-val" style="font-size:11px">${d.sector || '–'}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">52W High</div>
+          <div class="stat-val" style="color:var(--green)">${fmtPrice(d.week52_high)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">52W Low</div>
+          <div class="stat-val" style="color:var(--red)">${fmtPrice(d.week52_low)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Industry</div>
+          <div class="stat-val" style="font-size:10px">${d.industry || '–'}</div>
+        </div>
+      </div>
+
+      <div class="news-title">Recent News</div>
+      ${newsHTML}
+
+      <div class="events-note">
+        📅 Upcoming events: Check <a href="https://www.nseindia.com/companies-listing/corporate-filings-announcements" target="_blank" style="color:var(--amber)">NSE announcements</a> for earnings dates and corporate actions.
+      </div>
+    </div>`;
+}
+
+// ── SEARCH ────────────────────────────────────────────────────────────────────
+function onSearchInput() {
+  clearTimeout(searchTimeout);
+  const q = document.getElementById('search-input').value.trim();
+  if (q.length < 2) {
+    document.getElementById('search-results').style.display = 'none';
+    return;
+  }
+  searchTimeout = setTimeout(() => doSearch(true), 350);
+}
+
+async function doSearch(inline = false) {
+  const q = document.getElementById('search-input').value.trim();
+  if (!q) return;
+  try {
+    const r = await fetch(`${API}/search?q=${encodeURIComponent(q)}`);
+    const d = await r.json();
+    const results = d.results || [];
+
+    if (inline) {
+      const el = document.getElementById('search-results');
+      if (!results.length) {
+        el.style.display = 'none';
+        return;
+      }
+      el.innerHTML = results.map(s => `
+        <div class="search-result-item" onclick="selectSearchResult('${s.symbol}')">
+          <div>
+            <span style="font-weight:500;font-size:12px">${s.symbol}</span>
+            <span style="color:var(--text3);font-size:10px;margin-left:8px">${s.name}</span>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:12px">${fmtPrice(s.price)}</div>
+            <div style="font-size:10px;color:${chgColor(s.change_pct)}">${chgStr(s.change_pct)}</div>
+          </div>
+        </div>`).join('');
+      el.style.display = 'block';
+    } else {
+      document.getElementById('search-results').style.display = 'none';
+      if (results.length === 1) {
+        loadStock(results[0].symbol);
+      } else if (results.length > 1) {
+        // Show results in detail tab
+        switchTab('detail');
+        document.getElementById('detail-content').innerHTML = `
+          <div style="margin-bottom:14px;font-size:11px;color:var(--text3)">${results.length} results for "${q}"</div>
+          ${results.map(s => `
+            <div class="stock-card" onclick="loadStock('${s.symbol}')">
+              <div class="card-top">
+                <div><div class="card-symbol">${s.symbol}</div><div class="card-name">${s.name}</div></div>
+                <div><div class="card-price">${fmtPrice(s.price)}</div>
+                <div class="card-change" style="color:${chgColor(s.change_pct)}">${chgStr(s.change_pct)}</div></div>
+              </div>
+            </div>`).join('')}`;
+      } else {
+        switchTab('detail');
+        document.getElementById('detail-content').innerHTML =
+          `<div style="color:var(--text3);padding:20px;font-size:12px">No results for "${q}"</div>`;
+      }
+    }
+  } catch(e) {
+    console.error('Search error:', e);
+  }
+}
+
+function selectSearchResult(symbol) {
+  document.getElementById('search-results').style.display = 'none';
+  document.getElementById('search-input').value = symbol;
+  loadStock(symbol);
+}
+
+// Close search results on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrap')) {
+    document.getElementById('search-results').style.display = 'none';
+  }
+});
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+loadMovers();
+setInterval(loadMovers, 5 * 60 * 1000);
+</script>
+</body>
+</html>
